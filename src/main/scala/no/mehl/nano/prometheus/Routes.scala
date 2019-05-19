@@ -2,23 +2,18 @@ package no.mehl.nano.prometheus
 
 import cats.effect.Sync
 import cats.implicits._
-import io.circe.Json
-import io.prometheus.client.{CollectorRegistry, Counter}
-import org.http4s.circe._
-import org.http4s.dsl.Http4sDsl
+import io.prometheus.client.Counter
 import org.http4s.HttpRoutes
+import org.http4s.dsl.Http4sDsl
 
 object Routes {
 
-  def metrics[F[_]: Sync](H: HelloWorld[F]): HttpRoutes[F] = {
+  def metrics[F[_]: Sync](registry: NanoMetrics[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F]{}
     import dsl._
     HttpRoutes.of[F] {
       case GET -> Root / "metrics" =>
-        for {
-          greeting <- H.metrics(new CollectorRegistry())
-          resp <- Ok(greeting)
-        } yield resp
+        registry.c.registry.flatMap(org.http4s.metrics.prometheus.PrometheusExportService.generateResponse(_))
     }
   }
 }

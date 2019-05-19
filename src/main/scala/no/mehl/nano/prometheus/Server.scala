@@ -1,6 +1,6 @@
 package no.mehl.nano.prometheus
 
-import cats.effect.{ConcurrentEffect, ContextShift, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.Stream
 import io.prometheus.client.CollectorRegistry
@@ -13,7 +13,20 @@ import scala.concurrent.ExecutionContext.global
 
 object Server {
 
+  import scala.concurrent.duration._
+
   def stream[F[_]: ConcurrentEffect](implicit T: Timer[F], C: ContextShift[F]): Stream[F, Nothing] = {
+    val stream1 = for {
+      res <- {
+        println("bas")
+        fs2.Stream.awakeEvery[F](1.second)
+      }
+      foo <- fs2.Stream({
+        println("fo")
+      })
+    } yield res
+
+
     for {
       client  <- BlazeClientBuilder[F](global).stream
       metrics <- Stream.eval(CollectorRegistryF.apply[F](new CollectorRegistry()))
@@ -30,7 +43,7 @@ object Server {
       exitCode <- BlazeServerBuilder[F]
                    .bindHttp(8080, "0.0.0.0")
                    .withHttpApp(finalHttpApp)
-                   .serve
+                   .serve.concurrently(stream1)
     } yield exitCode
   }.drain
 }

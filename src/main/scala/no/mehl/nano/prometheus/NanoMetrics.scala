@@ -1,9 +1,10 @@
 package no.mehl.nano.prometheus
 
 import cats.Applicative
-import org.http4s.client.Client
+import cats.effect.Timer
 import cats.implicits._
-import io.prometheus.client.{Counter, Gauge}
+import io.prometheus.client.Counter
+import org.http4s.client.Client
 
 case class NanoMetrics[F[_]: Applicative](c: CollectorRegistryF[F], client: Client[F]) {}
 

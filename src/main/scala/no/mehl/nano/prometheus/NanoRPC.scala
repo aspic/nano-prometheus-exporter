@@ -13,6 +13,7 @@ import org.http4s.{EntityDecoder, EntityEncoder}
 trait NanoRPC[F[_]] {
   def blockCount: F[NanoRPC.BlockCount]
   def votingWeight: F[NanoRPC.AccountWeight]
+  def listRepresentatives: F[NanoRPC.Representatives]
 }
 
 object NanoRPC {
@@ -20,8 +21,10 @@ object NanoRPC {
 
   type NanoAddress = String
   def NanoAddress(a: String): NanoAddress = new NanoAddress(a)
+  type VotingWeight = String
+  def VotingWeight(a: String): VotingWeight = new VotingWeight(a)
 
-  final case class Action(action: String, account: Option[NanoAddress] = None)
+  final case class Action(action: String, account: Option[NanoAddress] = None, sorting: Option[Boolean] = None)
   object Action {
     implicit val actionEncoder: Encoder[Action]                            = deriveEncoder[Action]
     implicit def actionEntityEncoder[F[_]: Sync]: EntityEncoder[F, Action] = jsonEncoderOf
@@ -34,10 +37,17 @@ object NanoRPC {
       jsonOf
   }
 
-  final case class AccountWeight(weight: String)
+  final case class AccountWeight(weight: VotingWeight)
   object AccountWeight {
     implicit val accountWeightDecoder: Decoder[AccountWeight] = deriveDecoder[AccountWeight]
     implicit def accountWeightEntityDecoder[F[_]: Sync]: EntityDecoder[F, AccountWeight] =
+      jsonOf
+  }
+
+  final case class Representatives(representatives: Map[NanoAddress, VotingWeight])
+  object Representatives {
+    implicit val representativesDecoder: Decoder[Representatives] = deriveDecoder[Representatives]
+    implicit def representativesEntityDecoder[F[_]: Sync]: EntityDecoder[F, Representatives] =
       jsonOf
   }
 
@@ -60,5 +70,8 @@ object NanoRPC {
             println(t.printStackTrace())
             RPCError(t)
         }
+    override def listRepresentatives: F[Representatives] =
+      C.expect[Representatives](POST(Action("representatives"), config.nodeUrl))
+        .adaptError { case t => RPCError(t) } // Prevent Client Json Decoding Failure Leaking
   }
 }

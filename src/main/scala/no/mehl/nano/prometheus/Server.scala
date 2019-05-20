@@ -1,9 +1,9 @@
 package no.mehl.nano.prometheus
 
-import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.implicits._
 import fs2.Stream
-import io.prometheus.client.{CollectorRegistry, Counter}
+import io.prometheus.client.CollectorRegistry
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.implicits._
 import org.http4s.server.blaze.BlazeServerBuilder
@@ -16,16 +16,19 @@ object Server {
   import scala.concurrent.duration._
 
   def stream[F[_]: ConcurrentEffect](implicit T: Timer[F], C: ContextShift[F]): Stream[F, Nothing] = {
+
     def updateMetrics(nano: NanoMetrics[F]): Stream[F, Unit] =
       for {
-        _ <- fs2.Stream.awakeEvery[F](1.second)
+        _ <- fs2.Stream.awakeEvery[F](5.second)
         _ <- nano.update()
       } yield ()
 
     for {
+      config <- Config
+                 .apply[F]("http://localhost:7076", "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
       client        <- BlazeClientBuilder[F](global).stream
       registry      = new CollectorRegistry()
-      nanoMetrics   <- NanoMetrics.apply(registry, client)
+      nanoMetrics   <- NanoMetrics.apply(registry, client, config)
       pollingStream <- Stream.eval[F, Stream[F, Unit]](updateMetrics(nanoMetrics).pure[F])
       // Combine Service Routes into an HttpApp.
       // Can also be done via a Router if you

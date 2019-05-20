@@ -8,7 +8,7 @@ import org.http4s.Method._
 import org.http4s.circe._
 import org.http4s.client.Client
 import org.http4s.client.dsl.Http4sClientDsl
-import org.http4s.{EntityDecoder, EntityEncoder, Uri}
+import org.http4s.{EntityDecoder, EntityEncoder}
 
 trait NanoRPC[F[_]] {
   def blockCount: F[NanoRPC.BlockCount]
@@ -41,25 +41,24 @@ object NanoRPC {
       jsonOf
   }
 
-  final case class JokeError(e: Throwable) extends RuntimeException
+  final case class RPCError(e: Throwable) extends RuntimeException
 
   def impl[F[_]: Sync](C: Client[F], config: Config[F]): NanoRPC[F] = new NanoRPC[F] {
-    val dsl = new Http4sClientDsl[F] {}
+    val dsl: Http4sClientDsl[F] = new Http4sClientDsl[F] {}
     import dsl._
 
     override def blockCount: F[BlockCount] =
       C.expect[BlockCount](POST(Action("block_count"), config.nodeUrl))
-        .adaptError { case t => JokeError(t) } // Prevent Client Json Decoding Failure Leaking
+        .adaptError { case t => RPCError(t) } // Prevent Client Json Decoding Failure Leaking
 
     override def votingWeight: F[AccountWeight] =
       C.expect[AccountWeight](
           POST(Action("account_weight", Some(config.repAddress)), config.nodeUrl)
         )
         .adaptError {
-          case t => {
+          case t =>
             println(t.printStackTrace())
-            JokeError(t)
-          }
+            RPCError(t)
         }
   }
 }

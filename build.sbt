@@ -4,6 +4,12 @@ val Specs2Version = "4.1.0"
 val LogbackVersion = "1.2.3"
 val PrometheusVersion = "0.6.0"
 
+enablePlugins(DockerPlugin, JavaAppPackaging)
+
+dockerExposedPorts := Seq(8080, 8080)
+packageName in Docker := packageName.value
+version in Docker := version.value
+
 lazy val root = (project in file("."))
   .settings(
     organization := "no.mehl",

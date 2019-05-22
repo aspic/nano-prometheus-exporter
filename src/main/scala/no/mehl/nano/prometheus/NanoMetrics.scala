@@ -18,12 +18,20 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
   c.register(representativesCount)
 
   val representativesWeight: Gauge = Gauge
-    .build("representatives_weight", "100 largest representatives and their weight")
+    .build("top_representatives_weight", "5 largest representatives and their weight")
     .labelNames(
       "rep"
     )
     .create()
   c.register(representativesWeight)
+
+  val rrRepsCount: Gauge = Gauge.build("rebroadcasting_nodes","Count of all rebroadcasting nodes").create()
+  c.register(rrRepsCount)
+
+  val almostThere: Gauge = Gauge.build("close_nodes", "Count 100 closest nodes to 0.001% voting weight")
+    .labelNames("rep")
+    .create()
+  c.register(almostThere)
 
   def update(): fs2.Stream[F, Unit] =
     for {
@@ -39,15 +47,28 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
 
         representativesCount.set(representatives.right.get.representatives.size)
 
-        representatives.right.get.representatives.toList
+        val sortedReps = representatives.right.get.representatives.toList
           .map {
-            case (address, weight) => (address, (BigDecimal.apply(weight) / NanoMetrics.mNanoDivider).doubleValue())
-          }
-          .sortBy { case (_, b) => -b }
-          .take(200)
+          case (address, weight) => (address, (BigDecimal.apply(weight) / NanoMetrics.mNanoDivider / NanoMetrics.totalSupply).doubleValue())
+        }
+        .sortBy { case (_, b) => -b }
+
+        sortedReps
+          .take(5)
           .foreach {
-            case (address, weight) => representativesWeight.labels(address).set(weight)
+            case (address, weightPercent) => representativesWeight.labels(address).set(weightPercent)
           }
+
+        rrRepsCount
+          .set(sortedReps.count(_._2 >= NanoMetrics.rrLimit))
+
+        sortedReps.filter(_._2 < NanoMetrics.rrLimit).take(10)
+          .foreach {
+            case (address, weightPercent) => almostThere.labels(address).set(weightPercent)
+          }
+
+
+
         ()
       }
     } yield ()
@@ -57,6 +78,7 @@ object NanoMetrics {
 
   val mNanoDivider = BigDecimal("1000000000000000000000000000000")
   val totalSupply  = BigDecimal(133248290)
+  val rrLimit: Double = 0.001
 
   def apply[F[_]: Applicative: Sync](c: CollectorRegistry,
                                      client: Client[F],

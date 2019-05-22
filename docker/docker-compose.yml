@@ -1,9 +1,5 @@
 version: "3"
 services:
-  nano-prometheus-exporter:
-    image: nano-prometheus-exporter:0.0.1-SNAPSHOT
-    ports:
-      - 8080:8080
   prom:
     image: quay.io/prometheus/prometheus:v2.0.0
     volumes:
@@ -11,8 +7,7 @@ services:
     command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus"
     ports:
      - 9090:9090
-    depends_on:
-      - nano-prometheus-exporter
+    network_mode: host
   grafana:
     image: grafana/grafana
     ports:

@@ -23,9 +23,12 @@ object Server {
         _ <- nano.update()
       } yield ()
 
+    val nanoHost = sys.env.getOrElse("NANO_HOST", "default")
+
+    println(nanoHost)
     for {
       config <- Config
-                 .apply[F]("http://localhost:7076", "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
+                 .apply[F](nanoHost, "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
       client        <- BlazeClientBuilder[F](global).stream
       registry      = new CollectorRegistry()
       nanoMetrics   <- NanoMetrics.apply(registry, client, config)

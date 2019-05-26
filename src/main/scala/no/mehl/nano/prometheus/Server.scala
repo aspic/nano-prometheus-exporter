@@ -23,7 +23,7 @@ object Server {
         _ <- nano.update()
       } yield ()
 
-    val nanoHost = sys.env.getOrElse("NANO_HOST", "default")
+    val nanoHost = sys.env.getOrElse("NANO_HOST", "http://localhost:7076")
 
     println(nanoHost)
     for {

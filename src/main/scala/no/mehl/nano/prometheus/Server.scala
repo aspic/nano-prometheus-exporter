@@ -10,6 +10,7 @@ import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 
 import scala.concurrent.ExecutionContext.global
+import scala.util.Try
 
 object Server {
 
@@ -17,15 +18,20 @@ object Server {
 
   def stream[F[_]: ConcurrentEffect](implicit T: Timer[F], C: ContextShift[F]): Stream[F, Nothing] = {
 
+    val nanoHost                 = sys.env.getOrElse("NANO_HOST", "http://localhost:7076")
+    val defaultPollInterval: Int = 30
+    val pollInterval: Int =
+      Some(sys.env.getOrElse("POLL_INTERVAL", s"$defaultPollInterval"))
+        .flatMap(i => Try(i.toInt).toOption)
+        .getOrElse(defaultPollInterval)
+
     def updateMetrics(nano: NanoMetrics[F]): Stream[F, Unit] =
       for {
-        _ <- fs2.Stream.awakeEvery[F](5.second)
+        _ <- fs2.Stream.awakeEvery[F](pollInterval.second)
         _ <- nano.update()
       } yield ()
 
-    val nanoHost = sys.env.getOrElse("NANO_HOST", "http://localhost:7076")
-
-    println(nanoHost)
+    println(s"Bootstrapped with NANO host: $nanoHost")
     for {
       config <- Config
                  .apply[F](nanoHost, "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
@@ -40,7 +46,7 @@ object Server {
       httpApp = Routes.metrics[F](registry).orNotFound
 
       // With Middlewares in place
-      finalHttpApp = Logger.httpApp(true, true)(httpApp)
+      finalHttpApp = Logger.httpApp(true, false)(httpApp)
 
       exitCode <- BlazeServerBuilder[F]
                    .bindHttp(8080, "0.0.0.0")

@@ -44,6 +44,12 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
     .create()
     .register(c)
 
+  val allNodesVotingWeightOfSupply: Gauge = Gauge
+    .build("representatives_with_weight", "All representatives with their voting weight of total supply")
+    .labelNames("rep")
+    .create()
+    .register(c)
+
   val nanoClient: NanoRPC[F] = NanoRPC.impl(client, config)
 
   def update(): fs2.Stream[F, Unit] =
@@ -52,44 +58,45 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
       repResponse    <- fs2.Stream.attemptEval(nanoClient.listRepresentatives)
       _ = {
 
-        val res = for {
+        (for {
           nanoWeight      <- weightResponse
           representatives <- repResponse
         } yield {
-          val nodeWeight          = BigDecimal.apply(nanoWeight.weight) / NanoMetrics.mNanoDivider
-          val weightOfTotalSupply = nodeWeight / NanoMetrics.totalSupply
-          votingWeightOfTotal.set(weightOfTotalSupply.doubleValue())
-          votingWeightGauge.set(nodeWeight.doubleValue())
 
+          val targetNode = Representative.apply(config.repAddress, nanoWeight.weight)
+          votingWeightOfTotal.set(targetNode.votingWeightOfTotalSupply.doubleValue())
+          votingWeightGauge.set(targetNode.votingWeightNano.doubleValue())
           representativesCount.set(representatives.representatives.size)
 
           val sortedReps = representatives.representatives.toList
             .map {
               case (address, repWeight) =>
-                (address,
-                 (BigDecimal.apply(repWeight) / NanoMetrics.mNanoDivider / NanoMetrics.totalSupply).doubleValue())
+                Representative.apply(address, repWeight)
             }
-            .sortBy { case (_, b) => -b }
+            .filter(_.votingWeightOfTotalSupply > 0)
+            .sortBy(node => -node.votingWeightNano)
 
           sortedReps
             .take(5)
-            .foreach {
-              case (address, weightPercent) => representativesWeight.labels(address).set(weightPercent)
-            }
+            .foreach(
+              node => representativesWeight.labels(node.address).set(node.votingWeightOfTotalSupply.doubleValue())
+            )
 
           rrRepsCount
-            .set(sortedReps.count(_._2 >= NanoMetrics.rrLimit))
+            .set(sortedReps.count(_.votingWeightOfTotalSupply >= NanoMetrics.rrLimit))
 
+          // TODO? Remove
           sortedReps
-            .filter(_._2 < NanoMetrics.rrLimit)
+            .filter(_.votingWeightOfTotalSupply < NanoMetrics.rrLimit)
             .take(10)
-            .foreach {
-              case (address, weightPercent) => almostThere.labels(address).set(weightPercent)
-            }
-          ()
-        }
+            .foreach(node => almostThere.labels(node.address).set(node.votingWeightOfTotalSupply.doubleValue()))
 
-        res.fold(t => {
+          sortedReps.foreach(rep => {
+            allNodesVotingWeightOfSupply.labels(rep.address).set(rep.votingWeightOfTotalSupply.doubleValue())
+          })
+
+          ()
+        }).fold(t => {
           println(s"Error getting nano response")
           t.printStackTrace()
         }, _ => ())

@@ -7,6 +7,8 @@ import io.prometheus.client.{CollectorRegistry, Gauge}
 import no.mehl.nano.rpc.NanoRPC
 import org.http4s.client.Client
 
+case class Representative()
+
 class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[F], config: Config[F]) {
 
   val votingWeightOfTotal: Gauge =
@@ -31,43 +33,55 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
     .create()
     .register(c)
 
+  val nanoClient: NanoRPC[F] = NanoRPC.impl(client, config)
+
   def update(): fs2.Stream[F, Unit] =
     for {
-      nanoClient      <- fs2.Stream.eval(NanoRPC.impl(client, config).pure[F])
-      votingWeight    <- fs2.Stream.attemptEval(nanoClient.votingWeight)
-      representatives <- fs2.Stream.attemptEval(nanoClient.listRepresentatives)
+      weightResponse <- fs2.Stream.attemptEval(nanoClient.votingWeight)
+      repResponse    <- fs2.Stream.attemptEval(nanoClient.listRepresentatives)
       _ = {
 
-        val nodeWeight          = BigDecimal.apply(votingWeight.right.get.weight) / NanoMetrics.mNanoDivider
-        val weightOfTotalSupply = nodeWeight / NanoMetrics.totalSupply
-        votingWeightOfTotal.set(weightOfTotalSupply.doubleValue())
-        votingWeightGauge.set(nodeWeight.doubleValue())
+        val res = for {
+          nanoWeight      <- weightResponse
+          representatives <- repResponse
+        } yield {
+          val nodeWeight          = BigDecimal.apply(nanoWeight.weight) / NanoMetrics.mNanoDivider
+          val weightOfTotalSupply = nodeWeight / NanoMetrics.totalSupply
+          votingWeightOfTotal.set(weightOfTotalSupply.doubleValue())
+          votingWeightGauge.set(nodeWeight.doubleValue())
 
-        representativesCount.set(representatives.right.get.representatives.size)
+          representativesCount.set(representatives.representatives.size)
 
-        val sortedReps = representatives.right.get.representatives.toList
-          .map {
-            case (address, weight) =>
-              (address, (BigDecimal.apply(weight) / NanoMetrics.mNanoDivider / NanoMetrics.totalSupply).doubleValue())
-          }
-          .sortBy { case (_, b) => -b }
+          val sortedReps = representatives.representatives.toList
+            .map {
+              case (address, repWeight) =>
+                (address,
+                 (BigDecimal.apply(repWeight) / NanoMetrics.mNanoDivider / NanoMetrics.totalSupply).doubleValue())
+            }
+            .sortBy { case (_, b) => -b }
 
-        sortedReps
-          .take(5)
-          .foreach {
-            case (address, weightPercent) => representativesWeight.labels(address).set(weightPercent)
-          }
+          sortedReps
+            .take(5)
+            .foreach {
+              case (address, weightPercent) => representativesWeight.labels(address).set(weightPercent)
+            }
 
-        rrRepsCount
-          .set(sortedReps.count(_._2 >= NanoMetrics.rrLimit))
+          rrRepsCount
+            .set(sortedReps.count(_._2 >= NanoMetrics.rrLimit))
 
-        sortedReps
-          .filter(_._2 < NanoMetrics.rrLimit)
-          .take(10)
-          .foreach {
-            case (address, weightPercent) => almostThere.labels(address).set(weightPercent)
-          }
-        ()
+          sortedReps
+            .filter(_._2 < NanoMetrics.rrLimit)
+            .take(10)
+            .foreach {
+              case (address, weightPercent) => almostThere.labels(address).set(weightPercent)
+            }
+          ()
+        }
+
+        res.fold(t => {
+          println(s"Error getting nano response")
+          t.printStackTrace()
+        }, _ => ())
       }
     } yield ()
 }

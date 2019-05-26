@@ -66,11 +66,7 @@ object NanoRPC {
       C.expect[AccountWeight](
           POST(Action("account_weight", Some(config.repAddress)), config.nodeUrl)
         )
-        .adaptError {
-          case t =>
-            println(t.printStackTrace())
-            RPCError(t)
-        }
+        .adaptError { case t => RPCError(t) }
     override def listRepresentatives: F[Representatives] =
       C.expect[Representatives](POST(Action("representatives"), config.nodeUrl))
         .adaptError { case t => RPCError(t) } // Prevent Client Json Decoding Failure Leaking

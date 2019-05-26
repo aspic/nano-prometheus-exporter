@@ -26,24 +26,6 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
     Gauge.build("voting_weight_of_total_supply", "Percent of total voting weight").create().register(c)
   val votingWeightGauge: Gauge = Gauge.build("voting_weight", "Voting weight for this node").create().register(c)
 
-  val representativesCount: Gauge =
-    Gauge.build("representatives_count", "Counts all representatives").create().register(c)
-
-  val representativesWeight: Gauge = Gauge
-    .build("top_representatives_weight", "5 largest representatives and their weight")
-    .labelNames(
-      "rep"
-    )
-    .create()
-    .register(c)
-
-  val rrRepsCount: Gauge = Gauge.build("rebroadcasting_nodes", "Count of all rebroadcasting nodes").create().register(c)
-  val almostThere: Gauge = Gauge
-    .build("close_nodes", "Count 5 closest nodes to 0.001% voting weight")
-    .labelNames("rep")
-    .create()
-    .register(c)
-
   val allNodesVotingWeightOfSupply: Gauge = Gauge
     .build("representatives_with_weight", "All representatives with their voting weight of total supply")
     .labelNames("rep")
@@ -66,7 +48,6 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
           val targetNode = Representative.apply(config.repAddress, nanoWeight.weight)
           votingWeightOfTotal.set(targetNode.votingWeightOfTotalSupply.doubleValue())
           votingWeightGauge.set(targetNode.votingWeightNano.doubleValue())
-          representativesCount.set(representatives.representatives.size)
 
           val sortedReps = representatives.representatives.toList
             .map {
@@ -75,21 +56,6 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
             }
             .filter(_.votingWeightOfTotalSupply > 0)
             .sortBy(node => -node.votingWeightNano)
-
-          sortedReps
-            .take(5)
-            .foreach(
-              node => representativesWeight.labels(node.address).set(node.votingWeightOfTotalSupply.doubleValue())
-            )
-
-          rrRepsCount
-            .set(sortedReps.count(_.votingWeightOfTotalSupply >= NanoMetrics.rrLimit))
-
-          // TODO? Remove
-          sortedReps
-            .filter(_.votingWeightOfTotalSupply < NanoMetrics.rrLimit)
-            .take(10)
-            .foreach(node => almostThere.labels(node.address).set(node.votingWeightOfTotalSupply.doubleValue()))
 
           sortedReps.foreach(rep => {
             allNodesVotingWeightOfSupply.labels(rep.address).set(rep.votingWeightOfTotalSupply.doubleValue())

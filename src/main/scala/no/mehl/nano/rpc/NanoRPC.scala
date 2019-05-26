@@ -5,6 +5,7 @@ import cats.implicits._
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
 import no.mehl.nano.prometheus.Config
+import no.mehl.nano.rpc.NanoRPC.NanoAddress
 import org.http4s.Method._
 import org.http4s.circe._
 import org.http4s.client.Client
@@ -13,7 +14,7 @@ import org.http4s.{EntityDecoder, EntityEncoder}
 
 trait NanoRPC[F[_]] {
   def blockCount: F[NanoRPC.BlockCount]
-  def votingWeight: F[NanoRPC.AccountWeight]
+  def votingWeight(address: NanoAddress): F[NanoRPC.AccountWeight]
   def listRepresentatives: F[NanoRPC.Representatives]
 }
 
@@ -62,9 +63,9 @@ object NanoRPC {
       C.expect[BlockCount](POST(Action("block_count"), config.nodeUrl))
         .adaptError { case t => RPCError(t) } // Prevent Client Json Decoding Failure Leaking
 
-    override def votingWeight: F[AccountWeight] =
+    override def votingWeight(address: NanoAddress): F[AccountWeight] =
       C.expect[AccountWeight](
-          POST(Action("account_weight", Some(config.repAddress)), config.nodeUrl)
+          POST(Action("account_weight", Some(address)), config.nodeUrl)
         )
         .adaptError { case t => RPCError(t) }
     override def listRepresentatives: F[Representatives] =

@@ -5,9 +5,20 @@ import cats.effect.Sync
 import cats.implicits._
 import io.prometheus.client.{CollectorRegistry, Gauge}
 import no.mehl.nano.rpc.NanoRPC
+import no.mehl.nano.rpc.NanoRPC.NanoAddress
 import org.http4s.client.Client
 
-case class Representative()
+case class Representative(address: NanoAddress, votingWeightRaw: BigDecimal) {
+
+  val votingWeightNano: BigDecimal          = votingWeightRaw / NanoMetrics.mNanoDivider
+  val votingWeightOfTotalSupply: BigDecimal = votingWeightNano / NanoMetrics.totalSupply
+
+}
+
+object Representative {
+  def apply(address: String, votingWeight: String): Representative =
+    Representative(NanoAddress(address), BigDecimal.apply(votingWeight))
+}
 
 class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[F], config: Config[F]) {
 
@@ -28,7 +39,7 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
 
   val rrRepsCount: Gauge = Gauge.build("rebroadcasting_nodes", "Count of all rebroadcasting nodes").create().register(c)
   val almostThere: Gauge = Gauge
-    .build("close_nodes", "Count 100 closest nodes to 0.001% voting weight")
+    .build("close_nodes", "Count 5 closest nodes to 0.001% voting weight")
     .labelNames("rep")
     .create()
     .register(c)
@@ -37,7 +48,7 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
 
   def update(): fs2.Stream[F, Unit] =
     for {
-      weightResponse <- fs2.Stream.attemptEval(nanoClient.votingWeight)
+      weightResponse <- fs2.Stream.attemptEval(nanoClient.votingWeight(config.repAddress))
       repResponse    <- fs2.Stream.attemptEval(nanoClient.listRepresentatives)
       _ = {
 

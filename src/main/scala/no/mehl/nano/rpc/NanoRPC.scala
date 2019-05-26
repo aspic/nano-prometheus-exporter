@@ -1,9 +1,10 @@
-package no.mehl.nano.prometheus
+package no.mehl.nano.rpc
 
 import cats.effect.Sync
 import cats.implicits._
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
+import no.mehl.nano.prometheus.Config
 import org.http4s.Method._
 import org.http4s.circe._
 import org.http4s.client.Client

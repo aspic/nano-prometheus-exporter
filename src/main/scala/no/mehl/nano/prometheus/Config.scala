@@ -1,9 +1,9 @@
 package no.mehl.nano.prometheus
 
 import cats.Applicative
-import no.mehl.nano.prometheus.NanoRPC.NanoAddress
 import org.http4s.Uri
 import cats.implicits._
+import no.mehl.nano.rpc.NanoRPC.NanoAddress
 
 case class Config[F[_]](nodeUrl: Uri, repAddress: NanoAddress)
 

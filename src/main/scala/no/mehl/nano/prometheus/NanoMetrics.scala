@@ -4,6 +4,7 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import io.prometheus.client.{CollectorRegistry, Gauge}
+import no.mehl.nano.rpc.NanoRPC
 import org.http4s.client.Client
 
 class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[F], config: Config[F]) {

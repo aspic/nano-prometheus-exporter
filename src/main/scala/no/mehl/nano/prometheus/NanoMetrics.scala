@@ -32,6 +32,12 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
     .create()
     .register(c)
 
+  val allNodesVotingWeight: Gauge = Gauge
+    .build("representatives_with_weight_nano", "All representatives with their voting weight")
+    .labelNames("rep")
+    .create()
+    .register(c)
+
   val nanoClient: NanoRPC[F] = NanoRPC.impl(client, config)
 
   def update(): fs2.Stream[F, Unit] =
@@ -59,6 +65,7 @@ class NanoMetrics[F[_]: Applicative: Sync](c: CollectorRegistry, client: Client[
 
           sortedReps.foreach(rep => {
             allNodesVotingWeightOfSupply.labels(rep.address).set(rep.votingWeightOfTotalSupply.doubleValue())
+            allNodesVotingWeight.labels(rep.address).set(rep.votingWeightNano.doubleValue())
           })
 
           ()

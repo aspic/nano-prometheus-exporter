@@ -83,8 +83,10 @@ object NanoMetrics {
   val totalSupply     = BigDecimal(133248290)
   val rrLimit: Double = 0.001
 
-  def apply[F[_]: Applicative: Sync](c: CollectorRegistry,
-                                     client: Client[F],
-                                     config: Config[F]): fs2.Stream[F, NanoMetrics[F]] =
+  def apply[F[_]: Applicative: Sync](
+      c: CollectorRegistry,
+      client: Client[F],
+      config: Config[F]
+  ): fs2.Stream[F, NanoMetrics[F]] =
     fs2.Stream.eval[F, NanoMetrics[F]](new NanoMetrics[F](c, client, config).pure[F])
 }

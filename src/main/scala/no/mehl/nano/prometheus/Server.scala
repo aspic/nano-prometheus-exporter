@@ -18,7 +18,9 @@ object Server {
 
   def stream[F[_]: ConcurrentEffect](implicit T: Timer[F], C: ContextShift[F]): Stream[F, Nothing] = {
 
-    val nanoHost                 = sys.env.getOrElse("NANO_HOST", "http://localhost:7076")
+    val nanoHost = sys.env.getOrElse("NANO_HOST", "http://localhost:7076")
+    val nanoAddress =
+      sys.env.getOrElse("NANO_ADDRESS", "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
     val defaultPollInterval: Int = 30
     val pollInterval: Int =
       Some(sys.env.getOrElse("POLL_INTERVAL", s"$defaultPollInterval"))
@@ -31,10 +33,9 @@ object Server {
         _ <- nano.update()
       } yield ()
 
-    println(s"Bootstrapped with NANO host: $nanoHost")
     for {
       config <- Config
-                 .apply[F](nanoHost, "xrb_1hzoje373eapce4ses7xsx539suww5555hi9q8i8j7hpbayzxq4c4nn91hr8")
+                 .apply[F](nanoHost, nanoAddress)
       client        <- BlazeClientBuilder[F](global).stream
       registry      = new CollectorRegistry()
       nanoMetrics   <- NanoMetrics.apply(registry, client, config)
